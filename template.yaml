@@ -1,0 +1,106 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'URL Shortener using Lambda Function URL, Go runtime, and DynamoDB'
+
+Parameters:
+  S3Bucket:
+    Type: String
+    Description: S3 bucket containing the Lambda function deployment package
+  
+  S3Key:
+    Type: String
+    Description: S3 key for the Lambda function deployment package
+
+Resources:
+  # DynamoDB table for storing the shortened URLs
+  UrlShortenerTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: UrlShortener
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  # IAM role for Lambda function
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: !GetAtt UrlShortenerTable.Arn
+
+  # Lambda function for URL shortening
+  UrlShortenerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: url-shortener
+      Description: URL Shortener API using Lambda Function URL
+      Runtime: provided.al2023
+      Handler: bootstrap
+      MemorySize: 128
+      Architectures: arm64
+      Timeout: 10
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref S3Bucket
+        S3Key: !Ref S3Key
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref UrlShortenerTable
+
+  # Lambda Function URL to expose the API without API Gateway
+  UrlShortenerFunctionUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      AuthType: NONE  # Public access (no authentication required)
+      TargetFunctionArn: !GetAtt UrlShortenerFunction.Arn
+      Cors:
+        AllowCredentials: false
+        AllowHeaders:
+          - Content-Type
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        AllowOrigins:
+          - '*'
+        MaxAge: 86400  # 24 hours
+
+  # Permission to allow the function URL to invoke the Lambda function
+  UrlShortenerFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunctionUrl
+      FunctionName: !Ref UrlShortenerFunction
+      Principal: '*'
+      FunctionUrlAuthType: NONE
+
+Outputs:
+  UrlShortenerApiUrl:
+    Description: URL of the URL Shortener API
+    Value: !GetAtt UrlShortenerFunctionUrl.FunctionUrl
