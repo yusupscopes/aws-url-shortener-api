@@ -3,7 +3,7 @@
 This project implements a serverless URL shortener using AWS Lambda Function URL with Go runtime (Amazon Linux 2023) and DynamoDB.
 
 ## Features
-
+![Image](https://github.com/user-attachments/assets/617bb323-fa57-498d-a109-bd6b9df07f32)
 - Create shortened URLs with a random 5-character code
 - Redirect to original URLs using the short code
 - Serverless architecture using AWS Lambda Function URL (no API Gateway needed)
