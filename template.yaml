@@ -63,8 +63,8 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: 
-                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${UrlShortenerFunction}:*"
-                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${UrlShortenerFunction}"
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/url-shortener:*"
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/url-shortener"
 
   # Lambda function for URL shortening
   UrlShortenerFunction:
@@ -75,7 +75,7 @@ Resources:
       Runtime: provided.al2023
       Handler: bootstrap
       MemorySize: 128
-      Architectures: arm64
+      Architectures: [arm64]
       Timeout: 10
       Role: !GetAtt LambdaExecutionRole.Arn
       Code:
@@ -96,9 +96,8 @@ Resources:
         AllowHeaders:
           - Content-Type
         AllowMethods:
-          - GET
-          - POST
-          - OPTIONS
+          - "GET"
+          - "POST"
         AllowOrigins:
           - '*'
         MaxAge: 86400  # 24 hours

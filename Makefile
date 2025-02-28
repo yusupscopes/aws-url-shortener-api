@@ -4,7 +4,7 @@
 STACK_NAME ?= url-shortener
 BINARY_NAME ?= bootstrap
 REGION ?= ap-southeast-1
-S3_BUCKET ?= $(STACK_NAME)-lambda
+S3_BUCKET ?= $(STACK_NAME)-lambda-$(REGION)
 AWS_PROFILE ?= ym3594216
 # Build the Go binary for Lambda (Amazon Linux 2023)
 build:
