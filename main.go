@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -133,12 +132,12 @@ func getURL(ctx context.Context, client *dynamodb.Client, code string) (*URL, er
 }
 
 // Handler is the Lambda function handler
-func Handler(ctx context.Context, event events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+func Handler(ctx context.Context, event events.LambdaFunctionURLRequest) (events.LambdaFunctionURLResponse, error) {
 	// Initialize DynamoDB client
 	client, err := getClient(ctx)
 	if err != nil {
-		log.Printf("Error initializing DynamoDB client: %v", err)
-		return events.APIGatewayProxyResponse{
+		fmt.Printf("Error initializing DynamoDB client: %v\n", err)
+		return events.LambdaFunctionURLResponse{
 			StatusCode: http.StatusInternalServerError,
 			Body:       fmt.Sprintf(`{"error": "Internal server error: %v"}`, err),
 		}, nil
@@ -148,24 +147,24 @@ func Handler(ctx context.Context, event events.APIGatewayProxyRequest) (events.A
 	baseURL := os.Getenv("BASE_URL")
 	if baseURL == "" {
 		// Extract base URL from the request
-		baseURL = fmt.Sprintf("https://%s/%s", event.RequestContext.DomainName, event.RequestContext.Stage)
+		baseURL = fmt.Sprintf("https://%s", event.RequestContext.DomainName)
 	}
 
 	// Route based on the HTTP method and path
 	switch {
-	case event.HTTPMethod == "POST" && event.Path == "/url":
+	case event.RequestContext.HTTP.Method == "POST" && event.RawPath == "/url":
 		// Create a new short URL
 		var urlRequest URLRequest
 		err := json.Unmarshal([]byte(event.Body), &urlRequest)
 		if err != nil {
-			return events.APIGatewayProxyResponse{
+			return events.LambdaFunctionURLResponse{
 				StatusCode: http.StatusBadRequest,
 				Body:       `{"error": "Invalid request body"}`,
 			}, nil
 		}
 
 		if urlRequest.URL == "" {
-			return events.APIGatewayProxyResponse{
+			return events.LambdaFunctionURLResponse{
 				StatusCode: http.StatusBadRequest,
 				Body:       `{"error": "URL is required"}`,
 			}, nil
@@ -173,8 +172,8 @@ func Handler(ctx context.Context, event events.APIGatewayProxyRequest) (events.A
 
 		urlItem, err := createURL(ctx, client, urlRequest.URL)
 		if err != nil {
-			log.Printf("Error creating URL: %v", err)
-			return events.APIGatewayProxyResponse{
+			fmt.Printf("Error creating URL: %v\n", err)
+			return events.LambdaFunctionURLResponse{
 				StatusCode: http.StatusInternalServerError,
 				Body:       fmt.Sprintf(`{"error": "Failed to create short URL: %v"}`, err),
 			}, nil
@@ -187,7 +186,7 @@ func Handler(ctx context.Context, event events.APIGatewayProxyRequest) (events.A
 		}
 
 		responseJSON, _ := json.Marshal(response)
-		return events.APIGatewayProxyResponse{
+		return events.LambdaFunctionURLResponse{
 			StatusCode: http.StatusOK,
 			Headers: map[string]string{
 				"Content-Type": "application/json",
@@ -195,11 +194,11 @@ func Handler(ctx context.Context, event events.APIGatewayProxyRequest) (events.A
 			Body: string(responseJSON),
 		}, nil
 
-	case event.HTTPMethod == "GET" && strings.HasPrefix(event.Path, "/url/"):
+	case event.RequestContext.HTTP.Method == "GET" && strings.HasPrefix(event.RawPath, "/url/"):
 		// Get original URL from short code
-		code := strings.TrimPrefix(event.Path, "/url/")
+		code := strings.TrimPrefix(event.RawPath, "/url/")
 		if code == "" {
-			return events.APIGatewayProxyResponse{
+			return events.LambdaFunctionURLResponse{
 				StatusCode: http.StatusBadRequest,
 				Body:       `{"error": "Code is required"}`,
 			}, nil
@@ -207,21 +206,21 @@ func Handler(ctx context.Context, event events.APIGatewayProxyRequest) (events.A
 
 		urlItem, err := getURL(ctx, client, code)
 		if err != nil {
-			log.Printf("Error retrieving URL: %v", err)
+			fmt.Printf("Error retrieving URL: %v\n", err)
 			if strings.Contains(err.Error(), "URL not found") {
-				return events.APIGatewayProxyResponse{
+				return events.LambdaFunctionURLResponse{
 					StatusCode: http.StatusNotFound,
 					Body:       fmt.Sprintf(`{"error": "%v"}`, err),
 				}, nil
 			}
-			return events.APIGatewayProxyResponse{
+			return events.LambdaFunctionURLResponse{
 				StatusCode: http.StatusInternalServerError,
 				Body:       fmt.Sprintf(`{"error": "Failed to retrieve URL: %v"}`, err),
 			}, nil
 		}
 
 		// Redirect to the original URL
-		return events.APIGatewayProxyResponse{
+		return events.LambdaFunctionURLResponse{
 			StatusCode: http.StatusFound,
 			Headers: map[string]string{
 				"Location": urlItem.URL,
@@ -231,7 +230,7 @@ func Handler(ctx context.Context, event events.APIGatewayProxyRequest) (events.A
 
 	default:
 		// Handle unknown routes
-		return events.APIGatewayProxyResponse{
+		return events.LambdaFunctionURLResponse{
 			StatusCode: http.StatusNotFound,
 			Body:       `{"error": "Not found"}`,
 		}, nil
