@@ -53,6 +53,18 @@ Resources:
                   - dynamodb:Query
                   - dynamodb:Scan
                 Resource: !GetAtt UrlShortenerTable.Arn
+        - PolicyName: CloudWatchLogsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: 
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${UrlShortenerFunction}:*"
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${UrlShortenerFunction}"
 
   # Lambda function for URL shortening
   UrlShortenerFunction:
