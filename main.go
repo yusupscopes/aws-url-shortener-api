@@ -180,6 +180,8 @@ func Handler(ctx context.Context, event events.LambdaFunctionURLRequest) (events
 		}
 
 		shortURL := fmt.Sprintf("%s/url/%s", baseURL, urlItem.ID)
+		fmt.Printf("Successfully created short URL: %s for original URL: %s\n", shortURL, urlItem.URL)
+
 		response := URLResponse{
 			OriginalURL: urlItem.URL,
 			ShortURL:    shortURL,
@@ -218,6 +220,8 @@ func Handler(ctx context.Context, event events.LambdaFunctionURLRequest) (events
 				Body:       fmt.Sprintf(`{"error": "Failed to retrieve URL: %v"}`, err),
 			}, nil
 		}
+
+		fmt.Printf("Successfully retrieved original URL: %s for code: %s\n", urlItem.URL, code)
 
 		// Redirect to the original URL
 		return events.LambdaFunctionURLResponse{
