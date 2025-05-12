@@ -9,7 +9,7 @@ AWS_PROFILE ?= ym3594216
 # Build the Go binary for Lambda (Amazon Linux 2023)
 build:
 	@echo "Building Lambda function binary..."
-	GOOS=linux GOARCH=arm64 go build -tags lambda.norpc -o $(BINARY_NAME) main.go
+	GOOS=linux GOARCH=arm64 go build -tags lambda.norpc -o $(BINARY_NAME) cmd/main.go
 	chmod +x $(BINARY_NAME)
 	zip function.zip $(BINARY_NAME)
 

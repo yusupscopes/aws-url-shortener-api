@@ -20,11 +20,14 @@ Resources:
       TableName: UrlShortener
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: id
+        - AttributeName: shortCode
           AttributeType: S
       KeySchema:
-        - AttributeName: id
+        - AttributeName: shortCode
           KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expiration
+        Enabled: true
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
 

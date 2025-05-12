@@ -35,14 +35,15 @@ Create and manage short URLs with optional expiration and click analytics using 
       ├── cmd/
       │   └── main.go             # Lambda entrypoint
       ├── pkg/
-      │   ├── handler.go          # Request handlers for /shorten and /{shortCode}
-      │   ├── model.go            # Data models and DynamoDB schema definitions
-      │   └── utils.go            # Utility functions (e.g., shortCode generation)
-      ├── template.yaml           # AWS SAM template for infrastructure
-      ├── go.mod
-      ├── go.sum
-      ├── README.md
-      └── Makefile              # Build & deploy commands (SAM based)
+      │   ├── database/           # DynamoDB integration
+      │   ├── handler/            # Request handlers
+      │   ├── model/              # Data models
+      │   └── utils/              # Utility functions
+      ├── template.yaml           # AWS CloudFormation template for infrastructure
+      ├── go.mod                  # Go module file
+      ├── go.sum                  # Go sum file
+      ├── README.md               # Project documentation
+      └── Makefile                # Build & deploy commands (SAM based)
     ```
 
 - [x] **Set Up Basic Code:**
@@ -54,11 +55,11 @@ Create and manage short URLs with optional expiration and click analytics using 
 
 ## Phase 2: Implement URL Shortening (POST /shorten)
 
-- [ ] **Lambda Handler:**
+- [x] **Lambda Handler:**
   - Implement the endpoint to generate a unique short code using a random base62 string or a hash.
   - Validate the user-provided URL input.
 
-- [ ] **DynamoDB Integration:**
+- [x] **DynamoDB Integration:**
   - Store new URL mappings with details:
     - `shortCode` (primary key)
     - `originalURL`
@@ -66,14 +67,14 @@ Create and manage short URLs with optional expiration and click analytics using 
     - `expiration` timestamp (optional)
     - `clickCount` initialized to zero
 
-- [ ] **Response:**
+- [x] **Response:**
   - Return a JSON response containing the full shortened URL using the Lambda Function URL.
 
 ---
 
 ## Phase 3: Implement Redirection (GET /{shortCode})
 
-- [ ] **Lookup and Redirect:**
+- [x] **Lookup and Redirect:**
   - Retrieve the original URL from DynamoDB using the short code.
   - Perform an atomic update to increment the click count.
   - Return an HTTP 301/302 redirect with the `Location` header set to the original URL.
@@ -82,21 +83,21 @@ Create and manage short URLs with optional expiration and click analytics using 
 
 ## Phase 4: Optional Analytics Endpoint (GET /stats/{shortCode})
 
-- [ ] **Analytics Data:**
+- [x] **Analytics Data:**
   - Create an endpoint to retrieve analytics for a given short URL:
     - Original URL
     - Creation date
     - Expiration date (if applicable)
     - Total click count
 
-- [ ] **Response:**
+- [x] **Response:**
   - Return a formatted JSON object with the analytics data.
 
 ---
 
 ## Phase 5: Expiration Support
 
-- [ ] **TTL Configuration:**
+- [x] **TTL Configuration:**
   - Add an expiration attribute to new URL mappings.
   - Enable and configure DynamoDB’s Time-to-Live (TTL) on the `expiration` attribute to automatically delete expired entries.
 

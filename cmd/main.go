@@ -2,31 +2,35 @@ package main
 
 import (
 	"context"
+	"net/http"
+	"strings"
+
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
-	"https://github.com/yusupscopes/aws-url-shortener-api/pkg/handler"
-	"net/http"
+	"github.com/yusupscopes/aws-url-shortener-api/pkg/handler"
 )
 
 func router(ctx context.Context, event events.LambdaFunctionURLRequest) (events.LambdaFunctionURLResponse, error) {
-	switch event.RequestContext.HTTP.Method {
-	case http.MethodPost:
-		if event.RawPath == "/shorten" {
-			return handler.ShortenURL(ctx, event)
-		}
-	case http.MethodGet:
+	path := event.RawPath
+	method := event.RequestContext.HTTP.Method
+
+	switch {
+	case method == http.MethodPost && path == "/shorten":
+		return handler.ShortenURL(ctx, event)
+	
+	case method == http.MethodGet && strings.HasPrefix(path, "/stats/"):
+		return handler.GetURLStats(ctx, event)
+	
+	case method == http.MethodGet && path != "/":
+		// Any other GET request is treated as a redirect
 		return handler.RedirectURL(ctx, event)
+	
 	default:
 		return events.LambdaFunctionURLResponse{
-			StatusCode: http.StatusMethodNotAllowed,
-			Body:       "Method Not Allowed",
+			StatusCode: http.StatusNotFound,
+			Body:       `{"error": "Not found"}`,
 		}, nil
 	}
-
-	return events.LambdaFunctionURLResponse{
-		StatusCode: http.StatusNotFound,
-		Body:       "Not Found",
-	}, nil
 }
 
 func main() {
