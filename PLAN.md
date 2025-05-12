@@ -24,80 +24,111 @@ Create and manage short URLs with optional expiration and click analytics using 
 
 ## ✅ Phase-Based Plan
 
-### Phase 1: Project Setup & Repo Structure
 
-- [ ] Initialize Go module: `go mod init`
-- [ ] Define basic folder structure:
-```
-/cmd/main.go
-/pkg/
-handler.go
-model.go
-utils.go
-template.yaml (for SAM) or main.tf (for Terraform)
-```
-- [ ] Set up simple build + deploy flow using AWS CLI or IaC tool
+## Phase 1: Project Setup & Repo Structure
 
----
+- [x] **Initialize Project:**
+  - Set up Go module: `go mod init github.com/yourusername/url-shortener`
+  - Create a repository with the following folder structure:
+    ```
+    url-shortener/
+      ├── cmd/
+      │   └── main.go             # Lambda entrypoint
+      ├── pkg/
+      │   ├── handler.go          # Request handlers for /shorten and /{shortCode}
+      │   ├── model.go            # Data models and DynamoDB schema definitions
+      │   └── utils.go            # Utility functions (e.g., shortCode generation)
+      ├── template.yaml           # AWS SAM template for infrastructure
+      ├── go.mod
+      ├── go.sum
+      ├── README.md
+      └── Makefile              # Build & deploy commands (SAM based)
+    ```
 
-### Phase 2: Implement URL Shortening (POST /shorten)
-
-- [ ] Create URL shortening Lambda handler
-- [ ] Generate unique short codes (random base62 or hash)
-- [ ] Save mapping to DynamoDB:
-- shortCode (PK)
-- originalURL
-- createdAt
-- expiration (optional)
-- clickCount = 0
-- [ ] Return shortened URL using Lambda Function URL
+- [x] **Set Up Basic Code:**
+  - Create a basic Lambda handler in `cmd/main.go`.
+  - Add placeholder logic in `pkg/handler.go` for URL shortening and redirection.
+  - Define data models in `pkg/model.go` and helper functions in `pkg/utils.go`.
 
 ---
 
-### Phase 3: Implement Redirection (GET /{shortCode})
+## Phase 2: Implement URL Shortening (POST /shorten)
 
-- [ ] Retrieve original URL from DynamoDB
-- [ ] Update click count (atomic increment)
-- [ ] Return HTTP 301/302 redirect response
+- [ ] **Lambda Handler:**
+  - Implement the endpoint to generate a unique short code using a random base62 string or a hash.
+  - Validate the user-provided URL input.
 
----
+- [ ] **DynamoDB Integration:**
+  - Store new URL mappings with details:
+    - `shortCode` (primary key)
+    - `originalURL`
+    - `createdAt` timestamp
+    - `expiration` timestamp (optional)
+    - `clickCount` initialized to zero
 
-### Phase 4: Optional Analytics (GET /stats/{shortCode})
-
-- [ ] Add endpoint to return:
-- originalURL
-- createdAt
-- expiration
-- total clicks
-- [ ] Format and return JSON
-
----
-
-### Phase 5: Expiration Support
-
-- [ ] Add optional TTL to each entry
-- [ ] Configure DynamoDB TTL attribute
-- [ ] Clean up expired entries automatically
+- [ ] **Response:**
+  - Return a JSON response containing the full shortened URL using the Lambda Function URL.
 
 ---
 
-### Phase 6: Logging, Testing, and Monitoring
+## Phase 3: Implement Redirection (GET /{shortCode})
 
-- [ ] Add CloudWatch logs for each operation
-- [ ] Write unit tests for logic functions
-- [ ] Add simple integration test (e.g., curl or Postman collection)
+- [ ] **Lookup and Redirect:**
+  - Retrieve the original URL from DynamoDB using the short code.
+  - Perform an atomic update to increment the click count.
+  - Return an HTTP 301/302 redirect with the `Location` header set to the original URL.
 
 ---
 
-### Phase 7: Documentation & Deployment
+## Phase 4: Optional Analytics Endpoint (GET /stats/{shortCode})
 
-- [ ] Write detailed README with:
-- Project description
-- Architecture diagram
-- Deployment instructions
-- API usage examples
-- [ ] Publish live demo URL (Lambda Function URL)
-- [ ] (Optional) Write a blog or portfolio post
+- [ ] **Analytics Data:**
+  - Create an endpoint to retrieve analytics for a given short URL:
+    - Original URL
+    - Creation date
+    - Expiration date (if applicable)
+    - Total click count
+
+- [ ] **Response:**
+  - Return a formatted JSON object with the analytics data.
+
+---
+
+## Phase 5: Expiration Support
+
+- [ ] **TTL Configuration:**
+  - Add an expiration attribute to new URL mappings.
+  - Enable and configure DynamoDB’s Time-to-Live (TTL) on the `expiration` attribute to automatically delete expired entries.
+
+---
+
+## Phase 6: Logging, Testing, and Monitoring
+
+- [ ] **Logging:**
+  - Integrate AWS CloudWatch Logs for debugging and monitoring.
+  
+- [ ] **Testing:**
+  - Write unit tests covering URL generation, DynamoDB operations, and request handling logic.
+  - Create integration tests using tools like Postman or curl.
+
+- [ ] **Monitoring:**
+  - Set up CloudWatch metrics and alarms if needed.
+
+---
+
+## Phase 7: Documentation & Deployment
+
+- [ ] **Documentation:**
+  - Update `README.md` with detailed usage instructions, the architecture overview, and deployment steps (using SAM).
+  
+- [ ] **Infrastructure Deployment:**
+  - Use AWS SAM to build and deploy:
+    - Lambda function with a Function URL
+    - DynamoDB table with TTL enabled
+  - Validate endpoint functionality post-deployment.
+
+- [ ] **Deployment Automation:**
+  - Utilize the provided `Makefile` to streamline build and deployment steps.
 
 ---
 
@@ -135,3 +166,17 @@ Response:
 - Lambda Function URLs support basic HTTP handling.
 - Consider IAM or custom headers if you want private access or rate limiting.
 
+## ✅ Future Enhancements
+
+- **Custom Shortcodes:** Allow users to specify a custom shortcode instead of a randomly generated one.
+- **Authentication:** Implement authentication for a private API or to restrict modification/deletion of URL mappings.
+- **Rate Limiting:** Enforce usage quotas or rate limits to manage abuse and control traffic.
+- **Analytics Dashboard:** Create a web-based dashboard to visualize click analytics and trends.
+- **Custom Domain Support:** Enable the use of custom domains instead of the default Lambda Function URL.
+- **Extended Metadata:** Add support for storing additional metadata (e.g., referrer, geolocation data).
+
+---
+
+## ✅ Summary
+
+This PLAN document details the steps to build a robust, serverless URL Shortener service using AWS Lambda Function URLs and DynamoDB, along with future paths for enhancement and refinement. By following this phased approach, developers can systematically build, test, and deploy a production-ready cloud-native microservice.
