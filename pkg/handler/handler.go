@@ -14,6 +14,7 @@ import (
 	"github.com/yusupscopes/aws-url-shortener-api/pkg/model"
 	"github.com/yusupscopes/aws-url-shortener-api/pkg/utils"
 	"github.com/yusupscopes/aws-url-shortener-api/pkg/logger"
+	"github.com/yusupscopes/aws-url-shortener-api/pkg/monitoring"
 )
 
 const (
@@ -23,14 +24,25 @@ const (
 
 // ShortenURL handles the creation of a new short URL
 func ShortenURL(ctx context.Context, req events.LambdaFunctionURLRequest) (events.LambdaFunctionURLResponse, error) {
+	startTime := time.Now()
 	logger.Info("Processing shorten URL request", map[string]interface{}{
 		"requestId": req.RequestContext.RequestID,
 	})
+
+	// Initialize monitoring client
+	metricClient, err := monitoring.NewClient(ctx)
+	if err != nil {
+		logger.Warn("Failed to initialize monitoring client", err)
+		// Continue without monitoring
+	}
 
 	// Initialize DynamoDB client
 	client, err := database.GetClient(ctx)
 	if err != nil {
 		logger.Error("Failed to initialize DynamoDB client", err)
+		if metricClient != nil {
+			metricClient.RecordDynamoDBError(ctx, "GetClient")
+		}
 		return events.LambdaFunctionURLResponse{
 			StatusCode: http.StatusInternalServerError,
 			Body:       fmt.Sprintf(`{"error": "Internal server error: %v"}`, err),
@@ -89,6 +101,9 @@ func ShortenURL(ctx context.Context, req events.LambdaFunctionURLRequest) (event
 			"url":       shortenReq.URL,
 			"error":     err.Error(),
 		})
+		if metricClient != nil {
+			metricClient.RecordDynamoDBError(ctx, "CreateURL")
+		}
 		return events.LambdaFunctionURLResponse{
 			StatusCode: http.StatusInternalServerError,
 			Body:       fmt.Sprintf(`{"error": "Failed to create short URL: %v"}`, err),
@@ -110,6 +125,13 @@ func ShortenURL(ctx context.Context, req events.LambdaFunctionURLRequest) (event
 		"expiration":  urlItem.Expiration,
 	})
 
+	// Record metrics
+	if metricClient != nil {
+		metricClient.RecordURLCreated(ctx)
+		latencyMs := float64(time.Since(startTime).Milliseconds())
+		metricClient.RecordAPILatency(ctx, "/shorten", latencyMs)
+	}
+
 	response := model.ShortenResponse{
 		ShortURL: shortURL,
 	}
@@ -126,6 +148,8 @@ func ShortenURL(ctx context.Context, req events.LambdaFunctionURLRequest) (event
 
 // RedirectURL handles the redirection to the original URL
 func RedirectURL(ctx context.Context, req events.LambdaFunctionURLRequest) (events.LambdaFunctionURLResponse, error) {
+	startTime := time.Now()
+	
 	// Extract code from path
 	path := req.RawPath
 	if path == "/" {
@@ -134,6 +158,13 @@ func RedirectURL(ctx context.Context, req events.LambdaFunctionURLRequest) (even
 			StatusCode: http.StatusBadRequest,
 			Body:       `{"error": "Short code is required"}`,
 		}, nil
+	}
+
+	// Initialize monitoring client
+	metricClient, err := monitoring.NewClient(ctx)
+	if err != nil {
+		logger.Warn("Failed to initialize monitoring client", err)
+		// Continue without monitoring
 	}
 
 	// Remove leading slash
@@ -147,6 +178,9 @@ func RedirectURL(ctx context.Context, req events.LambdaFunctionURLRequest) (even
 	client, err := database.GetClient(ctx)
 	if err != nil {
 		logger.Error("Failed to initialize DynamoDB client", err)
+		if metricClient != nil {
+			metricClient.RecordDynamoDBError(ctx, "GetClient")
+		}
 		return events.LambdaFunctionURLResponse{
 			StatusCode: http.StatusInternalServerError,
 			Body:       fmt.Sprintf(`{"error": "Internal server error: %v"}`, err),
@@ -160,6 +194,9 @@ func RedirectURL(ctx context.Context, req events.LambdaFunctionURLRequest) (even
 			logger.Warn("URL not found for code", map[string]interface{}{
 				"shortCode": code,
 			})
+			if metricClient != nil {
+				metricClient.RecordURLNotFound(ctx)
+			}
 			return events.LambdaFunctionURLResponse{
 				StatusCode: http.StatusNotFound,
 				Body:       `{"error": "URL not found"}`,
@@ -170,6 +207,9 @@ func RedirectURL(ctx context.Context, req events.LambdaFunctionURLRequest) (even
 			"shortCode": code,
 			"error":     err.Error(),
 		})
+		if metricClient != nil {
+			metricClient.RecordDynamoDBError(ctx, "GetURL")
+		}
 		return events.LambdaFunctionURLResponse{
 			StatusCode: http.StatusInternalServerError,
 			Body:       fmt.Sprintf(`{"error": "Failed to retrieve URL: %v"}`, err),
@@ -184,6 +224,9 @@ func RedirectURL(ctx context.Context, req events.LambdaFunctionURLRequest) (even
 				"shortCode": code,
 				"error":     err.Error(),
 			})
+			if metricClient != nil {
+				metricClient.RecordDynamoDBError(ctx, "IncrementClickCount")
+			}
 		}
 	}()
 
@@ -192,6 +235,13 @@ func RedirectURL(ctx context.Context, req events.LambdaFunctionURLRequest) (even
 		"originalURL": urlItem.OriginalURL,
 		"clickCount":  urlItem.ClickCount + 1, // +1 because we're incrementing
 	})
+
+	// Record metrics
+	if metricClient != nil {
+		metricClient.RecordURLRedirected(ctx)
+		latencyMs := float64(time.Since(startTime).Milliseconds())
+		metricClient.RecordAPILatency(ctx, "/{shortCode}", latencyMs)
+	}
 
 	// Redirect to the original URL
 	return events.LambdaFunctionURLResponse{
@@ -205,6 +255,8 @@ func RedirectURL(ctx context.Context, req events.LambdaFunctionURLRequest) (even
 
 // GetURLStats retrieves analytics for a short URL
 func GetURLStats(ctx context.Context, req events.LambdaFunctionURLRequest) (events.LambdaFunctionURLResponse, error) {
+	startTime := time.Now()
+	
 	// Extract code from path
 	path := req.RawPath
 	code := strings.TrimPrefix(path, "/stats/")
@@ -218,6 +270,13 @@ func GetURLStats(ctx context.Context, req events.LambdaFunctionURLRequest) (even
 		}, nil
 	}
 
+	// Initialize monitoring client
+	metricClient, err := monitoring.NewClient(ctx)
+	if err != nil {
+		logger.Warn("Failed to initialize monitoring client", err)
+		// Continue without monitoring
+	}
+
 	logger.Info("Processing stats request", map[string]interface{}{
 		"shortCode": code,
 		"requestId": req.RequestContext.RequestID,
@@ -227,6 +286,9 @@ func GetURLStats(ctx context.Context, req events.LambdaFunctionURLRequest) (even
 	client, err := database.GetClient(ctx)
 	if err != nil {
 		logger.Error("Failed to initialize DynamoDB client", err)
+		if metricClient != nil {
+			metricClient.RecordDynamoDBError(ctx, "GetClient")
+		}
 		return events.LambdaFunctionURLResponse{
 			StatusCode: http.StatusInternalServerError,
 			Body:       fmt.Sprintf(`{"error": "Internal server error: %v"}`, err),
@@ -240,6 +302,9 @@ func GetURLStats(ctx context.Context, req events.LambdaFunctionURLRequest) (even
 			logger.Warn("URL not found for stats", map[string]interface{}{
 				"shortCode": code,
 			})
+			if metricClient != nil {
+				metricClient.RecordURLNotFound(ctx)
+			}
 			return events.LambdaFunctionURLResponse{
 				StatusCode: http.StatusNotFound,
 				Body:       `{"error": "URL not found"}`,
@@ -250,6 +315,9 @@ func GetURLStats(ctx context.Context, req events.LambdaFunctionURLRequest) (even
 			"shortCode": code,
 			"error":     err.Error(),
 		})
+		if metricClient != nil {
+			metricClient.RecordDynamoDBError(ctx, "GetURL")
+		}
 		return events.LambdaFunctionURLResponse{
 			StatusCode: http.StatusInternalServerError,
 			Body:       fmt.Sprintf(`{"error": "Failed to retrieve URL: %v"}`, err),
@@ -271,6 +339,13 @@ func GetURLStats(ctx context.Context, req events.LambdaFunctionURLRequest) (even
 		"createdAt":   urlItem.CreatedAt,
 		"expiration":  urlItem.Expiration,
 	})
+
+	// Record metrics
+	if metricClient != nil {
+		metricClient.RecordURLStatsRetrieved(ctx)
+		latencyMs := float64(time.Since(startTime).Milliseconds())
+		metricClient.RecordAPILatency(ctx, "/stats/{shortCode}", latencyMs)
+	}
 
 	responseJSON, _ := json.Marshal(stats)
 	return events.LambdaFunctionURLResponse{

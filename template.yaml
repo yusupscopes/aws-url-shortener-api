@@ -116,6 +116,78 @@ Resources:
       Principal: '*'
       FunctionUrlAuthType: NONE
 
+  # CloudWatch Alarms
+  HighErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-HighErrorRate"
+      AlarmDescription: Alarm if error rate is too high
+      Namespace: URLShortener
+      MetricName: DynamoDBError
+      Dimensions:
+        - Name: Operation
+          Value: GetURL
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      # Optional: Add SNS topic for notifications
+      # AlarmActions:
+      #   - !Ref AlertSNSTopic
+
+  HighLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-HighLatency"
+      AlarmDescription: Alarm if API latency is too high
+      Namespace: URLShortener
+      MetricName: APILatency
+      Dimensions:
+        - Name: Endpoint
+          Value: "/{shortCode}"
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 1000  # 1000ms = 1 second
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      # Optional: Add SNS topic for notifications
+      # AlarmActions:
+      #   - !Ref AlertSNSTopic
+
+  URLNotFoundAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-HighURLNotFoundRate"
+      AlarmDescription: Alarm if too many URLs are not found
+      Namespace: URLShortener
+      MetricName: URLNotFound
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 50
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      # Optional: Add SNS topic for notifications
+      # AlarmActions:
+      #   - !Ref AlertSNSTopic
+
+  # Optional: SNS Topic for Alarm Notifications
+  # AlertSNSTopic:
+  #   Type: AWS::SNS::Topic
+  #   Properties:
+  #     DisplayName: !Sub "${AWS::StackName} Alerts"
+  #     TopicName: !Sub "${AWS::StackName}-alerts"
+
+  # Optional: SNS Subscription for Email Notifications
+  # AlertEmailSubscription:
+  #   Type: AWS::SNS::Subscription
+  #   Properties:
+  #     TopicArn: !Ref AlertSNSTopic
+  #     Protocol: email
+  #     Endpoint: your-email@example.com
 Outputs:
   UrlShortenerApiUrl:
     Description: URL of the URL Shortener API
