@@ -22,8 +22,18 @@ const (
 	codeLength = 5
 )
 
+// Handler holds dependencies for URL shortener handlers
+type Handler struct {
+	db database.DynamoDBInterface
+}
+
+// NewHandler creates a new handler with the given database
+func NewHandler(db database.DynamoDBInterface) *Handler {
+	return &Handler{db: db}
+}
+
 // ShortenURL handles the creation of a new short URL
-func ShortenURL(ctx context.Context, req events.LambdaFunctionURLRequest) (events.LambdaFunctionURLResponse, error) {
+func (h *Handler) ShortenURL(ctx context.Context, req events.LambdaFunctionURLRequest) (events.LambdaFunctionURLResponse, error) {
 	startTime := time.Now()
 	logger.Info("Processing shorten URL request", map[string]interface{}{
 		"requestId": req.RequestContext.RequestID,
@@ -34,19 +44,6 @@ func ShortenURL(ctx context.Context, req events.LambdaFunctionURLRequest) (event
 	if err != nil {
 		logger.Warn("Failed to initialize monitoring client", err)
 		// Continue without monitoring
-	}
-
-	// Initialize DynamoDB client
-	client, err := database.GetClient(ctx)
-	if err != nil {
-		logger.Error("Failed to initialize DynamoDB client", err)
-		if metricClient != nil {
-			metricClient.RecordDynamoDBError(ctx, "GetClient")
-		}
-		return events.LambdaFunctionURLResponse{
-			StatusCode: http.StatusInternalServerError,
-			Body:       fmt.Sprintf(`{"error": "Internal server error: %v"}`, err),
-		}, nil
 	}
 
 	// Parse request body
@@ -94,7 +91,7 @@ func ShortenURL(ctx context.Context, req events.LambdaFunctionURLRequest) (event
 	}
 
 	// Save to DynamoDB
-	err = database.CreateURL(ctx, client, urlItem)
+	err = h.db.CreateURL(ctx, urlItem)
 	if err != nil {
 		logger.Error("Failed to create URL in DynamoDB", map[string]interface{}{
 			"shortCode": code,
@@ -147,7 +144,7 @@ func ShortenURL(ctx context.Context, req events.LambdaFunctionURLRequest) (event
 }
 
 // RedirectURL handles the redirection to the original URL
-func RedirectURL(ctx context.Context, req events.LambdaFunctionURLRequest) (events.LambdaFunctionURLResponse, error) {
+func (h *Handler) RedirectURL(ctx context.Context, req events.LambdaFunctionURLRequest) (events.LambdaFunctionURLResponse, error) {
 	startTime := time.Now()
 	
 	// Extract code from path
@@ -174,21 +171,8 @@ func RedirectURL(ctx context.Context, req events.LambdaFunctionURLRequest) (even
 		"requestId": req.RequestContext.RequestID,
 	})
 
-	// Initialize DynamoDB client
-	client, err := database.GetClient(ctx)
-	if err != nil {
-		logger.Error("Failed to initialize DynamoDB client", err)
-		if metricClient != nil {
-			metricClient.RecordDynamoDBError(ctx, "GetClient")
-		}
-		return events.LambdaFunctionURLResponse{
-			StatusCode: http.StatusInternalServerError,
-			Body:       fmt.Sprintf(`{"error": "Internal server error: %v"}`, err),
-		}, nil
-	}
-
 	// Get URL from DynamoDB
-	urlItem, err := database.GetURL(ctx, client, code)
+	urlItem, err := h.db.GetURL(ctx, code)
 	if err != nil {
 		if strings.Contains(err.Error(), "URL not found") {
 			logger.Warn("URL not found for code", map[string]interface{}{
@@ -218,7 +202,7 @@ func RedirectURL(ctx context.Context, req events.LambdaFunctionURLRequest) (even
 
 	// Increment click count (don't wait for the result)
 	go func() {
-		err := database.IncrementClickCount(context.Background(), client, code)
+		err := h.db.IncrementClickCount(context.Background(), code)
 		if err != nil {
 			logger.Error("Failed to increment click count", map[string]interface{}{
 				"shortCode": code,
@@ -254,7 +238,7 @@ func RedirectURL(ctx context.Context, req events.LambdaFunctionURLRequest) (even
 }
 
 // GetURLStats retrieves analytics for a short URL
-func GetURLStats(ctx context.Context, req events.LambdaFunctionURLRequest) (events.LambdaFunctionURLResponse, error) {
+func (h *Handler) GetURLStats(ctx context.Context, req events.LambdaFunctionURLRequest) (events.LambdaFunctionURLResponse, error) {
 	startTime := time.Now()
 	
 	// Extract code from path
@@ -282,21 +266,8 @@ func GetURLStats(ctx context.Context, req events.LambdaFunctionURLRequest) (even
 		"requestId": req.RequestContext.RequestID,
 	})
 
-	// Initialize DynamoDB client
-	client, err := database.GetClient(ctx)
-	if err != nil {
-		logger.Error("Failed to initialize DynamoDB client", err)
-		if metricClient != nil {
-			metricClient.RecordDynamoDBError(ctx, "GetClient")
-		}
-		return events.LambdaFunctionURLResponse{
-			StatusCode: http.StatusInternalServerError,
-			Body:       fmt.Sprintf(`{"error": "Internal server error: %v"}`, err),
-		}, nil
-	}
-
 	// Get URL from DynamoDB
-	urlItem, err := database.GetURL(ctx, client, code)
+	urlItem, err := h.db.GetURL(ctx, code)
 	if err != nil {
 		if strings.Contains(err.Error(), "URL not found") {
 			logger.Warn("URL not found for stats", map[string]interface{}{

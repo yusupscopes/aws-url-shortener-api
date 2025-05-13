@@ -18,22 +18,53 @@ const (
 	TableName = "UrlShortener"
 )
 
-// GetClient creates and returns a DynamoDB client
-func GetClient(ctx context.Context) (*dynamodb.Client, error) {
-	logger.Debug("Initializing DynamoDB client")
+// DynamoDBInterface defines the interface for DynamoDB operations
+type DynamoDBInterface interface {
+	GetClient(ctx context.Context) (*dynamodb.Client, error)
+	CreateURL(ctx context.Context, urlItem *model.URLItem) error
+	GetURL(ctx context.Context, code string) (*model.URLItem, error)
+	IncrementClickCount(ctx context.Context, code string) error
+}
+
+// DynamoDB implements the DynamoDBInterface
+type DynamoDB struct {
+	client *dynamodb.Client
+}
+
+// NewDynamoDB creates a new DynamoDB instance
+func NewDynamoDB(client *dynamodb.Client) DynamoDBInterface {
+	return &DynamoDB{client: client}
+}
+
+// GetClient returns the DynamoDB client
+func (d *DynamoDB) GetClient(ctx context.Context) (*dynamodb.Client, error) {
+	if d.client != nil {
+		return d.client, nil
+	}
+	
+	// Initialize a new client if one wasn't provided
+	logger.Debug("Initializing new DynamoDB client")
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		logger.Error("Failed to load AWS config", err)
 		return nil, err
 	}
-	return dynamodb.NewFromConfig(cfg), nil
+	
+	// Store the client for future use
+	d.client = dynamodb.NewFromConfig(cfg)
+	return d.client, nil
 }
 
-// CreateURL creates a new short URL in DynamoDB
-func CreateURL(ctx context.Context, client *dynamodb.Client, urlItem *model.URLItem) error {
+// CreateURL creates a new URL in DynamoDB
+func (d *DynamoDB) CreateURL(ctx context.Context, urlItem *model.URLItem) error {
 	logger.Debug("Creating URL in DynamoDB", map[string]interface{}{
 		"shortCode": urlItem.ShortCode,
 	})
+	
+	client, err := d.GetClient(ctx)
+	if err != nil {
+		return err
+	}
 	
 	// Marshal URL item to DynamoDB attribute values
 	av, err := attributevalue.MarshalMap(urlItem)
@@ -68,11 +99,16 @@ func CreateURL(ctx context.Context, client *dynamodb.Client, urlItem *model.URLI
 }
 
 // GetURL retrieves a URL by its short code
-func GetURL(ctx context.Context, client *dynamodb.Client, code string) (*model.URLItem, error) {
+func (d *DynamoDB) GetURL(ctx context.Context, code string) (*model.URLItem, error) {
 	logger.Debug("Getting URL from DynamoDB", map[string]interface{}{
 		"shortCode": code,
 		"tableName": TableName,
 	})
+	
+	client, err := d.GetClient(ctx)
+	if err != nil {
+		return nil, err
+	}
 	
 	// Get key condition
 	key, err := attributevalue.MarshalMap(map[string]string{
@@ -127,11 +163,16 @@ func GetURL(ctx context.Context, client *dynamodb.Client, code string) (*model.U
 }
 
 // IncrementClickCount increments the click count for a URL
-func IncrementClickCount(ctx context.Context, client *dynamodb.Client, code string) error {
+func (d *DynamoDB) IncrementClickCount(ctx context.Context, code string) error {
 	logger.Debug("Incrementing click count in DynamoDB", map[string]interface{}{
 		"shortCode": code,
 		"tableName": TableName,
 	})
+	
+	client, err := d.GetClient(ctx)
+	if err != nil {
+		return err
+	}
 	
 	key, err := attributevalue.MarshalMap(map[string]string{
 		"shortCode": code,

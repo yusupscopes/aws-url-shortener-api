@@ -8,6 +8,7 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/yusupscopes/aws-url-shortener-api/pkg/database"
 	"github.com/yusupscopes/aws-url-shortener-api/pkg/handler"
 	"github.com/yusupscopes/aws-url-shortener-api/pkg/logger"
 	"github.com/yusupscopes/aws-url-shortener-api/pkg/monitoring"
@@ -32,19 +33,25 @@ func router(ctx context.Context, event events.LambdaFunctionURLRequest) (events.
 		// Continue without monitoring
 	}
 
+	// Create database interface directly
+	db := database.NewDynamoDB(nil) // Pass nil to let it create its own client when needed
+	
+	// Create handler with database
+	h := handler.NewHandler(db)
+
 	var response events.LambdaFunctionURLResponse
 	var routeErr error
 
 	switch {
 	case method == http.MethodPost && path == "/shorten":
-		response, routeErr = handler.ShortenURL(ctx, event)
+		response, routeErr = h.ShortenURL(ctx, event)
 	
 	case method == http.MethodGet && strings.HasPrefix(path, "/stats/"):
-		response, routeErr = handler.GetURLStats(ctx, event)
+		response, routeErr = h.GetURLStats(ctx, event)
 	
 	case method == http.MethodGet && path != "/":
 		// Any other GET request is treated as a redirect
-		response, routeErr = handler.RedirectURL(ctx, event)
+		response, routeErr = h.RedirectURL(ctx, event)
 	
 	default:
 		logger.Warn("Route not found", map[string]interface{}{

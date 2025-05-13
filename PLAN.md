@@ -108,11 +108,11 @@ Create and manage short URLs with optional expiration and click analytics using 
 - [x] **Logging:**
   - Integrate AWS CloudWatch Logs for debugging and monitoring.
   
-- [ ] **Testing:**
+- [x] **Testing:**
   - Write unit tests covering URL generation, DynamoDB operations, and request handling logic.
   - Create integration tests using tools like Postman or curl.
 
-- [ ] **Monitoring:**
+- [x] **Monitoring:**
   - Set up CloudWatch metrics and alarms if needed.
 
 ---
