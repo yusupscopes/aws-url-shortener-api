@@ -13,6 +13,7 @@ import (
 	"github.com/yusupscopes/aws-url-shortener-api/pkg/database"
 	"github.com/yusupscopes/aws-url-shortener-api/pkg/model"
 	"github.com/yusupscopes/aws-url-shortener-api/pkg/utils"
+	"github.com/yusupscopes/aws-url-shortener-api/pkg/logger"
 )
 
 const (
@@ -22,10 +23,14 @@ const (
 
 // ShortenURL handles the creation of a new short URL
 func ShortenURL(ctx context.Context, req events.LambdaFunctionURLRequest) (events.LambdaFunctionURLResponse, error) {
+	logger.Info("Processing shorten URL request", map[string]interface{}{
+		"requestId": req.RequestContext.RequestID,
+	})
+
 	// Initialize DynamoDB client
 	client, err := database.GetClient(ctx)
 	if err != nil {
-		fmt.Printf("Error initializing DynamoDB client: %v\n", err)
+		logger.Error("Failed to initialize DynamoDB client", err)
 		return events.LambdaFunctionURLResponse{
 			StatusCode: http.StatusInternalServerError,
 			Body:       fmt.Sprintf(`{"error": "Internal server error: %v"}`, err),
@@ -36,6 +41,10 @@ func ShortenURL(ctx context.Context, req events.LambdaFunctionURLRequest) (event
 	var shortenReq model.ShortenRequest
 	err = json.Unmarshal([]byte(req.Body), &shortenReq)
 	if err != nil {
+		logger.Warn("Invalid request body", map[string]interface{}{
+			"body":  req.Body,
+			"error": err.Error(),
+		})
 		return events.LambdaFunctionURLResponse{
 			StatusCode: http.StatusBadRequest,
 			Body:       `{"error": "Invalid request body"}`,
@@ -43,6 +52,7 @@ func ShortenURL(ctx context.Context, req events.LambdaFunctionURLRequest) (event
 	}
 
 	if shortenReq.URL == "" {
+		logger.Warn("URL is required but was empty")
 		return events.LambdaFunctionURLResponse{
 			StatusCode: http.StatusBadRequest,
 			Body:       `{"error": "URL is required"}`,
@@ -52,7 +62,7 @@ func ShortenURL(ctx context.Context, req events.LambdaFunctionURLRequest) (event
 	// Generate a random code for the short URL
 	code, err := utils.GenerateShortCode(codeLength)
 	if err != nil {
-		fmt.Printf("Error generating short code: %v\n", err)
+		logger.Error("Failed to generate short code", err)
 		return events.LambdaFunctionURLResponse{
 			StatusCode: http.StatusInternalServerError,
 			Body:       fmt.Sprintf(`{"error": "Failed to generate short code: %v"}`, err),
@@ -74,7 +84,11 @@ func ShortenURL(ctx context.Context, req events.LambdaFunctionURLRequest) (event
 	// Save to DynamoDB
 	err = database.CreateURL(ctx, client, urlItem)
 	if err != nil {
-		fmt.Printf("Error creating URL: %v\n", err)
+		logger.Error("Failed to create URL in DynamoDB", map[string]interface{}{
+			"shortCode": code,
+			"url":       shortenReq.URL,
+			"error":     err.Error(),
+		})
 		return events.LambdaFunctionURLResponse{
 			StatusCode: http.StatusInternalServerError,
 			Body:       fmt.Sprintf(`{"error": "Failed to create short URL: %v"}`, err),
@@ -89,7 +103,12 @@ func ShortenURL(ctx context.Context, req events.LambdaFunctionURLRequest) (event
 	}
 
 	shortURL := fmt.Sprintf("%s/%s", baseURL, urlItem.ShortCode)
-	fmt.Printf("Successfully created short URL: %s for original URL: %s\n", shortURL, urlItem.OriginalURL)
+	logger.Info("Successfully created short URL", map[string]interface{}{
+		"shortCode":   urlItem.ShortCode,
+		"originalURL": urlItem.OriginalURL,
+		"shortURL":    shortURL,
+		"expiration":  urlItem.Expiration,
+	})
 
 	response := model.ShortenResponse{
 		ShortURL: shortURL,
@@ -107,19 +126,10 @@ func ShortenURL(ctx context.Context, req events.LambdaFunctionURLRequest) (event
 
 // RedirectURL handles the redirection to the original URL
 func RedirectURL(ctx context.Context, req events.LambdaFunctionURLRequest) (events.LambdaFunctionURLResponse, error) {
-	// Initialize DynamoDB client
-	client, err := database.GetClient(ctx)
-	if err != nil {
-		fmt.Printf("Error initializing DynamoDB client: %v\n", err)
-		return events.LambdaFunctionURLResponse{
-			StatusCode: http.StatusInternalServerError,
-			Body:       fmt.Sprintf(`{"error": "Internal server error: %v"}`, err),
-		}, nil
-	}
-
 	// Extract code from path
 	path := req.RawPath
 	if path == "/" {
+		logger.Warn("Redirect request with empty path")
 		return events.LambdaFunctionURLResponse{
 			StatusCode: http.StatusBadRequest,
 			Body:       `{"error": "Short code is required"}`,
@@ -128,17 +138,38 @@ func RedirectURL(ctx context.Context, req events.LambdaFunctionURLRequest) (even
 
 	// Remove leading slash
 	code := strings.TrimPrefix(path, "/")
+	logger.Info("Processing redirect request", map[string]interface{}{
+		"shortCode": code,
+		"requestId": req.RequestContext.RequestID,
+	})
+
+	// Initialize DynamoDB client
+	client, err := database.GetClient(ctx)
+	if err != nil {
+		logger.Error("Failed to initialize DynamoDB client", err)
+		return events.LambdaFunctionURLResponse{
+			StatusCode: http.StatusInternalServerError,
+			Body:       fmt.Sprintf(`{"error": "Internal server error: %v"}`, err),
+		}, nil
+	}
 
 	// Get URL from DynamoDB
 	urlItem, err := database.GetURL(ctx, client, code)
 	if err != nil {
-		fmt.Printf("Error retrieving URL: %v\n", err)
 		if strings.Contains(err.Error(), "URL not found") {
+			logger.Warn("URL not found for code", map[string]interface{}{
+				"shortCode": code,
+			})
 			return events.LambdaFunctionURLResponse{
 				StatusCode: http.StatusNotFound,
 				Body:       `{"error": "URL not found"}`,
 			}, nil
 		}
+		
+		logger.Error("Failed to retrieve URL from DynamoDB", map[string]interface{}{
+			"shortCode": code,
+			"error":     err.Error(),
+		})
 		return events.LambdaFunctionURLResponse{
 			StatusCode: http.StatusInternalServerError,
 			Body:       fmt.Sprintf(`{"error": "Failed to retrieve URL: %v"}`, err),
@@ -149,11 +180,18 @@ func RedirectURL(ctx context.Context, req events.LambdaFunctionURLRequest) (even
 	go func() {
 		err := database.IncrementClickCount(context.Background(), client, code)
 		if err != nil {
-			fmt.Printf("Error incrementing click count: %v\n", err)
+			logger.Error("Failed to increment click count", map[string]interface{}{
+				"shortCode": code,
+				"error":     err.Error(),
+			})
 		}
 	}()
 
-	fmt.Printf("Successfully retrieved original URL: %s for code: %s\n", urlItem.OriginalURL, code)
+	logger.Info("Redirecting to original URL", map[string]interface{}{
+		"shortCode":   code,
+		"originalURL": urlItem.OriginalURL,
+		"clickCount":  urlItem.ClickCount + 1, // +1 because we're incrementing
+	})
 
 	// Redirect to the original URL
 	return events.LambdaFunctionURLResponse{
@@ -167,36 +205,51 @@ func RedirectURL(ctx context.Context, req events.LambdaFunctionURLRequest) (even
 
 // GetURLStats retrieves analytics for a short URL
 func GetURLStats(ctx context.Context, req events.LambdaFunctionURLRequest) (events.LambdaFunctionURLResponse, error) {
-	// Initialize DynamoDB client
-	client, err := database.GetClient(ctx)
-	if err != nil {
-		fmt.Printf("Error initializing DynamoDB client: %v\n", err)
-		return events.LambdaFunctionURLResponse{
-			StatusCode: http.StatusInternalServerError,
-			Body:       fmt.Sprintf(`{"error": "Internal server error: %v"}`, err),
-		}, nil
-	}
-
 	// Extract code from path
 	path := req.RawPath
 	code := strings.TrimPrefix(path, "/stats/")
 	if code == "" || code == path {
+		logger.Warn("Stats request with invalid path", map[string]interface{}{
+			"path": path,
+		})
 		return events.LambdaFunctionURLResponse{
 			StatusCode: http.StatusBadRequest,
 			Body:       `{"error": "Short code is required"}`,
 		}, nil
 	}
 
+	logger.Info("Processing stats request", map[string]interface{}{
+		"shortCode": code,
+		"requestId": req.RequestContext.RequestID,
+	})
+
+	// Initialize DynamoDB client
+	client, err := database.GetClient(ctx)
+	if err != nil {
+		logger.Error("Failed to initialize DynamoDB client", err)
+		return events.LambdaFunctionURLResponse{
+			StatusCode: http.StatusInternalServerError,
+			Body:       fmt.Sprintf(`{"error": "Internal server error: %v"}`, err),
+		}, nil
+	}
+
 	// Get URL from DynamoDB
 	urlItem, err := database.GetURL(ctx, client, code)
 	if err != nil {
-		fmt.Printf("Error retrieving URL: %v\n", err)
 		if strings.Contains(err.Error(), "URL not found") {
+			logger.Warn("URL not found for stats", map[string]interface{}{
+				"shortCode": code,
+			})
 			return events.LambdaFunctionURLResponse{
 				StatusCode: http.StatusNotFound,
 				Body:       `{"error": "URL not found"}`,
 			}, nil
 		}
+		
+		logger.Error("Failed to retrieve URL for stats", map[string]interface{}{
+			"shortCode": code,
+			"error":     err.Error(),
+		})
 		return events.LambdaFunctionURLResponse{
 			StatusCode: http.StatusInternalServerError,
 			Body:       fmt.Sprintf(`{"error": "Failed to retrieve URL: %v"}`, err),
@@ -210,6 +263,14 @@ func GetURLStats(ctx context.Context, req events.LambdaFunctionURLRequest) (even
 		Expiration:  urlItem.Expiration,
 		ClickCount:  urlItem.ClickCount,
 	}
+
+	logger.Info("Retrieved stats for URL", map[string]interface{}{
+		"shortCode":   code,
+		"originalURL": urlItem.OriginalURL,
+		"clickCount":  urlItem.ClickCount,
+		"createdAt":   urlItem.CreatedAt,
+		"expiration":  urlItem.Expiration,
+	})
 
 	responseJSON, _ := json.Marshal(stats)
 	return events.LambdaFunctionURLResponse{

@@ -105,7 +105,7 @@ Create and manage short URLs with optional expiration and click analytics using 
 
 ## Phase 6: Logging, Testing, and Monitoring
 
-- [ ] **Logging:**
+- [x] **Logging:**
   - Integrate AWS CloudWatch Logs for debugging and monitoring.
   
 - [ ] **Testing:**
