@@ -60,7 +60,7 @@ if ! echo $REDIRECT_RESPONSE | grep -q "302 Found"; then
 fi
 
 # Check if redirect response contains the correct Location header
-if ! echo $REDIRECT_RESPONSE | grep -q "Location: https://example.com/test"; then
+if ! echo $REDIRECT_RESPONSE | grep -q "location: https://example.com/test"; then
   echo "Incorrect redirect location"
   exit 1
 fi

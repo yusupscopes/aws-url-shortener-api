@@ -37,11 +37,14 @@ Create and manage short URLs with optional expiration and click analytics using 
       ├── pkg/
       │   ├── database/           # DynamoDB integration
       │   ├── handler/            # Request handlers
+      │   ├── logger/             # Logging
       │   ├── model/              # Data models
+      │   ├── monitoring/         # Metrics & monitoring
       │   └── utils/              # Utility functions
       ├── template.yaml           # AWS CloudFormation template for infrastructure
       ├── go.mod                  # Go module file
       ├── go.sum                  # Go sum file
+      ├── integration_test.sh     # Integration tests
       ├── README.md               # Project documentation
       └── Makefile                # Build & deploy commands (SAM based)
     ```
@@ -119,16 +122,16 @@ Create and manage short URLs with optional expiration and click analytics using 
 
 ## Phase 7: Documentation & Deployment
 
-- [ ] **Documentation:**
-  - Update `README.md` with detailed usage instructions, the architecture overview, and deployment steps (using SAM).
+- [x] **Documentation:**
+  - Update `README.md` with detailed usage instructions, the architecture overview, and deployment steps (using CloudFormation).
   
-- [ ] **Infrastructure Deployment:**
-  - Use AWS SAM to build and deploy:
+- [x] **Infrastructure Deployment:**
+  - Use AWS CloudFormation to build and deploy:
     - Lambda function with a Function URL
     - DynamoDB table with TTL enabled
   - Validate endpoint functionality post-deployment.
 
-- [ ] **Deployment Automation:**
+- [x] **Deployment Automation:**
   - Utilize the provided `Makefile` to streamline build and deployment steps.
 
 ---

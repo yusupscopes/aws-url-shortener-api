@@ -6,22 +6,26 @@ This project implements a serverless URL shortener using AWS Lambda Function URL
 ![Image](https://github.com/user-attachments/assets/617bb323-fa57-498d-a109-bd6b9df07f32)
 - Create shortened URLs with a random 5-character code
 - Redirect to original URLs using the short code
+- View analytics for shortened URLs
+- Optional URL expiration with DynamoDB TTL
 - Serverless architecture using AWS Lambda Function URL (no API Gateway needed)
 - DynamoDB for persistent storage
 - Go implementation with AWS Lambda Go runtime (AL2023)
+
+## Architecture Overview
+
+This URL shortener uses a serverless architecture with the following components:
+
+- **AWS Lambda with Function URL**: Handles all HTTP requests without requiring API Gateway
+- **DynamoDB**: Stores URL mappings with TTL support for expiration
+- **CloudWatch Logs**: Captures logs for monitoring and debugging
+- **CloudFormation**: Manages all infrastructure as code
 
 ## Prerequisites
 
 - AWS CLI configured with appropriate permissions
 - Go 1.21 or later
 - Make
-
-## Project Structure
-
-- `main.go` - Go code for the Lambda function
-- `template.yaml` - CloudFormation template to deploy all necessary resources
-- `Makefile` - Helper commands for building and deploying
-- `go.mod` and `go.sum` - Go module dependencies
 
 ## Setup Instructions
 
@@ -51,30 +55,47 @@ https://abcdef123456.lambda-url.us-east-1.on.aws/
 ### Create a Short URL
 
 ```bash
-curl -X POST https://your-lambda-url.on.aws/url -H "Content-Type: application/json" -d '{"url":"https://example.com/very/long/url/that/needs/shortening"}'
+curl -X POST https://your-lambda-url.on.aws/shorten -H "Content-Type: application/json" -d '{"url":"https://example.com/very/long/url/that/needs/shortening", "expire_in_days": 7}'
 ```
 
 Response:
 ```json
-{
-  "originalUrl": "https://example.com/very/long/url/that/needs/shortening",
-  "shortUrl": "https://your-lambda-url.on.aws/url/ab1Cd"
+{  
+  "short_url": "https://your-lambda-url.on.aws/xYz123"
 }
 ```
+The `expire_in_days` parameter is optional. If provided, the short URL will automatically expire after the specified number of days.
 
 ### Use a Short URL
 
 Simply visit the short URL in a browser or make a GET request to it:
 
 ```bash
-curl -L https://your-lambda-url.on.aws/url/ab1Cd
+curl -L https://your-lambda-url.on.aws/xYz123
 ```
 
-This will redirect to the original URL.
+This will redirect to the original URL and increment the click count.
+
+### Get URL Statistics
+
+```bash
+curl https://your-lambda-url.on.aws/stats/xYz123
+```
+
+Response:
+```json
+{
+  "short_code": "xYz123",
+  "original_url": "https://example.com/very/long/url/that/needs/shortening",
+  "created_at": "2023-04-15T14:32:17Z",
+  "expiration": "2023-04-22T14:32:17Z",
+  "click_count": 42
+}
+```
 
 ## Customization
 
-- Change the short code length by modifying the `codeLength` constant in `main.go`
+- Change the short code length by modifying the `codeLength` constant in the code
 - Adjust the lambda timeout, memory size, or other properties in `template.yaml`
 - Modify CORS settings in the Lambda Function URL resource
 
@@ -91,6 +112,12 @@ go get github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue
 go get github.com/aws/aws-sdk-go-v2/service/dynamodb
 ```
 
+## Monitoring and Logging
+
+- CloudWatch Logs are automatically configured for the Lambda function
+- View logs in the AWS Console under CloudWatch Logs
+- Consider setting up CloudWatch Alarms for error rates or high latency
+
 ## Cleanup
 
 To remove all resources created by this project:
@@ -105,3 +132,12 @@ aws cloudformation delete-stack --stack-name url-shortener
 - Consider adding authentication (change `AuthType` to `AWS_IAM` in the CloudFormation template)
 - Add rate limiting to prevent abuse
 - Implement URL validation to prevent malicious URLs
+
+## Future Enhancements
+
+- Rate limiting: Prevent abuse of the service
+- Authentication: Add user accounts to manage URLs
+- Analytics dashboard: Visualize click data and trends
+- Custom domain support: Use your own domain instead of the Lambda URL
+- Custom shortcodes: Allow users to specify their own short codes
+- Extended metadata: Store additional data like referrer or geolocation

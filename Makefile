@@ -1,4 +1,4 @@
-.PHONY: build clean deploy
+.PHONY: build clean deploy create-bucket test delete
 
 # Configuration
 STACK_NAME ?= url-shortener
@@ -22,6 +22,21 @@ clean:
 create-bucket:
 	@echo "Creating S3 bucket if it doesn't exist..."
 	aws s3api head-bucket --bucket $(S3_BUCKET) 2>/dev/null --profile $(AWS_PROFILE) || aws s3 mb s3://$(S3_BUCKET) --region $(REGION) --profile $(AWS_PROFILE)
+
+# Run tests
+test:
+	@echo "Running tests..."
+	go test ./... -v
+
+# Delete the CloudFormation stack
+delete:
+	@echo "Deleting CloudFormation stack..."
+	aws cloudformation delete-stack \
+		--stack-name $(STACK_NAME) \
+		--region $(REGION) \
+		--profile $(AWS_PROFILE)
+	@echo "Stack deletion initiated. You can check the status with:"
+	@echo "aws cloudformation describe-stacks --stack-name $(STACK_NAME) --region $(REGION) --profile $(AWS_PROFILE)"
 
 # Deploy the CloudFormation stack
 deploy: build create-bucket
